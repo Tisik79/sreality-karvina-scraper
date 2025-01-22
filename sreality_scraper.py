@@ -4,57 +4,54 @@ import pandas as pd
 import time
 import re
 from datetime import datetime
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 import os.path
-import pickle
+import json
 
 class SrealityScraper:
     def __init__(self):
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
-        self.SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
     def get_google_drive_service(self):
-        creds = None
-        # Token načte uložené přihlašovací údaje
-        if os.path.exists('token.pickle'):
-            with open('token.pickle', 'rb') as token:
-                creds = pickle.load(token)
-                
-        # Pokud nejsou platné přihlašovací údaje, vyžádá nové
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    'credentials.json', self.SCOPES)
-                creds = flow.run_local_server(port=0)
-            # Uloží přihlašovací údaje pro příští použití
-            with open('token.pickle', 'wb') as token:
-                pickle.dump(creds, token)
-
-        return build('drive', 'v3', credentials=creds)
+        """Vytvoří službu Google Drive pomocí service account credentials"""
+        try:
+            credentials_json = json.loads(os.environ.get('GOOGLE_CREDENTIALS', '{}'))
+            credentials = service_account.Credentials.from_service_account_info(
+                credentials_json,
+                scopes=['https://www.googleapis.com/auth/drive.file']
+            )
+            return build('drive', 'v3', credentials=credentials)
+        except Exception as e:
+            print(f"Chyba při vytváření Google Drive služby: {e}")
+            return None
 
     def upload_to_drive(self, filename, folder_id=None):
         """Nahraje soubor na Google Drive do specifikované složky"""
         service = self.get_google_drive_service()
-        file_metadata = {
-            'name': filename,
-            'parents': [folder_id] if folder_id else []
-        }
-        media = MediaFileUpload(filename, resumable=True)
-        file = service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id'
-        ).execute()
-        print(f'Soubor {filename} byl nahrán na Google Drive s ID: {file.get("id")}')
-        return file.get('id')
+        if not service:
+            print("Nelze nahrát soubor - služba Google Drive není dostupná")
+            return None
+
+        try:
+            file_metadata = {
+                'name': filename,
+                'parents': [folder_id] if folder_id else []
+            }
+            media = MediaFileUpload(filename, resumable=True)
+            file = service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id'
+            ).execute()
+            print(f'Soubor {filename} byl nahrán na Google Drive s ID: {file.get("id")}')
+            return file.get('id')
+        except Exception as e:
+            print(f"Chyba při nahrávání souboru na Google Drive: {e}")
+            return None
 
     def get_listing_urls(self):
         base_url = "https://www.sreality.cz/hledani/prodej/byty/karvina"
