@@ -22,40 +22,25 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         
-    - name: Create and verify credentials
+    - name: Create credentials file
       env:
-        GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
       run: |
-        # Vytvoření credentials souboru
-        echo "$GOOGLE_CREDENTIALS" > credentials.json
+        echo "$CREDENTIALS" > credentials.json
+        echo "Credentials file created and contains $(wc -l credentials.json) lines"
         
-        # Kontrola, zda soubor existuje a není prázdný
-        if [ ! -s credentials.json ]; then
-          echo "Chyba: credentials.json je prázdný!"
-          exit 1
-        fi
-        
-        # Kontrola, zda je soubor validní JSON
-        if ! jq empty credentials.json 2>/dev/null; then
-          echo "Chyba: credentials.json není validní JSON!"
-          exit 1
-        fi
-        
-        # Kontrola required fields
-        if ! jq -e '.client_email and .private_key and .project_id' credentials.json > /dev/null; then
-          echo "Chyba: V credentials.json chybí povinná pole!"
-          exit 1
-        fi
-        
-        echo "Credentials soubor je validní"
-        echo "Project ID: $(jq -r .project_id credentials.json)"
-        echo "Client email: $(jq -r .client_email credentials.json)"
-    
     - name: Run scraper
-      env:
-        GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
       run: python sreality_scraper.py
       
+    - name: Upload logs if failure
+      if: failure()
+      uses: actions/upload-artifact@v2
+      with:
+        name: logs
+        path: |
+          credentials.json
+          *.log
+        
     - name: Cleanup
       if: always()
       run: rm -f credentials.json
