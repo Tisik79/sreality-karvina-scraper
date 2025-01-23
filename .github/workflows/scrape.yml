@@ -10,38 +10,29 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v3
     
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v2
       with:
         python-version: '3.x'
     
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        
+        pip install requests beautifulsoup4 pandas openpyxl google-api-python-client google-auth-httplib2 google-auth-oauthlib
+    
     - name: Create credentials file
       env:
-        CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        GOOGLE_CREDENTIALS_B64: ${{ secrets.GOOGLE_CREDENTIALS }}
       run: |
-        echo "$CREDENTIALS" > credentials.json
-        echo "Credentials file created and contains $(wc -l credentials.json) lines"
-        
+        echo "$GOOGLE_CREDENTIALS_B64" | base64 --decode > credentials.json
+      shell: bash
+    
     - name: Run scraper
       run: python sreality_scraper.py
-      
-    - name: Upload logs if failure
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: debug-logs
-        path: |
-          credentials.json
-          *.log
-        retention-days: 5
-        
-    - name: Cleanup
+    
+    - name: Clean up credentials
       if: always()
       run: rm -f credentials.json
